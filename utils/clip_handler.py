@@ -59,9 +59,15 @@ def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, record
     clip_start = datetime.fromisoformat(clip_start_time.replace('Z', '+00:00'))
     clip_end = datetime.fromisoformat(clip_end_time.replace('Z', '+00:00'))
 
-    # Calculate the start and end offsets in seconds
-    start_seconds = (clip_start - recording_start).total_seconds()
-    end_seconds = (clip_end - recording_start).total_seconds()
+    # Calculate the start and end offsets in seconds, adjusting by 5 seconds
+    start_seconds = (clip_start - recording_start).total_seconds() + 5
+    end_seconds = (clip_end - recording_start).total_seconds() - 5
+
+    # Ensure the adjusted times are within valid bounds
+    if start_seconds < 0:
+        start_seconds = 0
+    if end_seconds < start_seconds:
+        end_seconds = start_seconds
 
     # Convert start time to minutes:seconds for logging
     start_minutes = int(start_seconds // 60)

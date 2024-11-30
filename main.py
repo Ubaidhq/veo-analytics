@@ -7,7 +7,7 @@ from utils.clip_handler import download_full_video, clip_video
 from utils.video_processing import concatenate_clips
 from moviepy.editor import VideoFileClip
 
-def process_match(match):
+def process_match(match, offset):
     match_id = match['id']
     match_name = match.get('title', 'Unnamed')
     print(f"Processing match: {match_name} with ID: {match_id}")
@@ -58,7 +58,7 @@ def process_match(match):
                 continue
 
             clip_output_path = f"./clips/{clip['id']}_clipped.mp4"
-            clip_video(full_video_path, clip_start_time, clip_end_time, match['timeline']['start'], clip_output_path, tag)
+            clip_video(full_video_path, clip_start_time, clip_end_time, match['timeline']['start'], clip_output_path, tag, offset)
             all_clip_paths.append(clip_output_path)
 
         # Step 3: Concatenate all extracted clips
@@ -70,7 +70,7 @@ def process_match(match):
     except Exception as e:
         print(f"Error processing match {match_id}: {e}")
 
-def main(match_id: str = None):
+def main(match_id: str = None, offset: int = 5):
     # Step 1: Fetch the list of matches
     try:
         matches = list_matches()
@@ -82,14 +82,14 @@ def main(match_id: str = None):
             for match in matches['items']:
                 if match.get('id', '') == match_id:
                     match_found = True
-                    process_match(match)
+                    process_match(match, offset)
                     break
             if not match_found:
                 print(f"Match ID '{match_id}' not found.")
         else:
             # Process only the first match
             if matches['items']:
-                process_match(matches['items'][0])
+                process_match(matches['items'][0], offset)
             else:
                 print("No matches available to process.")
 
@@ -99,6 +99,7 @@ def main(match_id: str = None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process and concatenate clips for a specific match.")
     parser.add_argument("match_id", type=str, nargs='?', help="The ID of the match to process.")
+    parser.add_argument("--offset", type=int, default=5, help="Number of seconds to trim from the start and end of each clip.")
     args = parser.parse_args()
 
-    main(args.match_id)
+    main(args.match_id, args.offset)
