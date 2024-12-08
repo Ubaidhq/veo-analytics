@@ -43,7 +43,7 @@ def download_full_video(clip: dict) -> str:
     print(f"Video downloaded successfully and saved to {save_path}")
     return save_path
 
-def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str) -> None:
+def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str, offset: int) -> None:
     """
     Clip a segment from the video based on start and end times relative to the recording start time.
 
@@ -53,15 +53,16 @@ def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, record
     :param recording_start_time: Start time of the recording in ISO 8601 format.
     :param output_path: Path where the clipped video will be saved.
     :param tag: Tag of the clip for logging purposes.
+    :param offset: Number of seconds to trim from the start and end of the clip.
     """
     # Parse the datetime strings
     recording_start = datetime.fromisoformat(recording_start_time.replace('Z', '+00:00'))
     clip_start = datetime.fromisoformat(clip_start_time.replace('Z', '+00:00'))
     clip_end = datetime.fromisoformat(clip_end_time.replace('Z', '+00:00'))
 
-    # Calculate the start and end offsets in seconds, adjusting by 5 seconds
-    start_seconds = (clip_start - recording_start).total_seconds() + 5
-    end_seconds = (clip_end - recording_start).total_seconds() - 5
+    # Calculate the start and end offsets in seconds, adjusting by the offset
+    start_seconds = (clip_start - recording_start).total_seconds() + offset
+    end_seconds = (clip_end - recording_start).total_seconds() - offset
 
     # Ensure the adjusted times are within valid bounds
     if start_seconds < 0:

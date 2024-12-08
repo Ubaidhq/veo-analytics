@@ -1,11 +1,43 @@
 import os
 import argparse
 from datetime import datetime
+from threading import Thread, Lock
 from veo_api.matches import list_matches
 from veo_api.clips import list_clips
 from utils.clip_handler import download_full_video, clip_video
 from utils.video_processing import concatenate_clips
 from moviepy.editor import VideoFileClip
+from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get the number of threads from the environment variable, default to 4
+NUM_THREADS = int(os.getenv('NUM_THREADS', 4))
+
+# Initialize a lock for thread-safe operations
+lock = Lock()
+
+def download_clip(clip, full_video_path, recording_start_time, video_duration, offset, all_clip_paths):
+    clip_start_time = clip['timeline']['start']
+    clip_end_time = clip['timeline']['end']
+    tag = clip.get('tags', 'No Tag')  # Assuming 'tags' is a list or string
+
+    # Calculate the start and end offsets in seconds
+    start_seconds = (datetime.fromisoformat(clip_start_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
+    end_seconds = (datetime.fromisoformat(clip_end_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
+
+    if start_seconds >= video_duration or end_seconds > video_duration:
+        with lock:
+            print(f"Skipping clip {clip['id']} due to invalid timeline.")
+        return
+
+    clip_output_path = f"./clips/{clip['id']}_clipped.mp4"
+    clip_video(full_video_path, clip_start_time, clip_end_time, recording_start_time.isoformat(), clip_output_path, tag, offset)
+
+    with lock:
+        all_clip_paths.append(clip_output_path)
 
 def process_match(match, offset):
     match_id = match['id']
@@ -42,24 +74,17 @@ def process_match(match, offset):
         # Sort clips by their start time
         clips.sort(key=lambda clip: datetime.fromisoformat(clip['timeline']['start'].replace('Z', '+00:00')))
 
-        # Extract and save each clip based on timeline
+        # Create a thread pool for downloading clips
         all_clip_paths = []
-        for clip in clips:
-            clip_start_time = clip['timeline']['start']
-            clip_end_time = clip['timeline']['end']
-            tag = clip.get('tags', 'No Tag')  # Assuming 'tags' is a list or string
+        with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+            futures = []
+            for clip in clips:
+                future = executor.submit(download_clip, clip, full_video_path, recording_start_time, video_duration, offset, all_clip_paths)
+                futures.append(future)
 
-            # Calculate the start and end offsets in seconds
-            start_seconds = (datetime.fromisoformat(clip_start_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
-            end_seconds = (datetime.fromisoformat(clip_end_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
-
-            if start_seconds >= video_duration or end_seconds > video_duration:
-                print(f"Skipping clip {clip['id']} due to invalid timeline.")
-                continue
-
-            clip_output_path = f"./clips/{clip['id']}_clipped.mp4"
-            clip_video(full_video_path, clip_start_time, clip_end_time, match['timeline']['start'], clip_output_path, tag, offset)
-            all_clip_paths.append(clip_output_path)
+            # Wait for all threads to complete
+            for future in futures:
+                future.result()
 
         # Step 3: Concatenate all extracted clips
         if all_clip_paths:
