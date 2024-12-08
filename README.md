@@ -1,4 +1,4 @@
-# VEO Camera Video Processing for Social Media Content
+# Veo footage processing for social media content
 
 This repository provides tools for processing sports match videos captured by VEO cameras. It allows you to download full match recordings, extract specific clips based on timeline data, and concatenate these clips into a single video suitable for social media sharing. The focus is on efficiently handling video and audio streams and ensuring that clips are processed in chronological order.
 
