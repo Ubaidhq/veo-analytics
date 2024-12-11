@@ -12,3 +12,9 @@ python-dotenv==1.0.1
 requests==2.32.3
 tqdm==4.67.1
 urllib3==2.2.3
+opencv-python>=4.8.0
+numpy>=1.24.0
+torch>=2.0.0
+ultralytics  # for YOLOv8
+scikit-learn>=1.0.0
+filterpy  # for Kalman filtering
