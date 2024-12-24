@@ -1,6 +1,6 @@
 # Veo footage processing for social media content
 
-This repository provides tools for processing sports match videos captured by VEO cameras. It allows you to download full match recordings, extract specific clips based on timeline data, and concatenate these clips into a single video suitable for social media sharing. The focus is on efficiently handling video and audio streams and ensuring that clips are processed in chronological order.
+This repository provides tools for processing sports match videos captured by VEO cameras. It allows you to download full match recordings, extract specific clips based on timeline data, and concatenate these clips into a single video suitable for social media sharing. 
 
 ## Features
 
@@ -9,7 +9,6 @@ This repository provides tools for processing sports match videos captured by VE
 - **Audio Handling**: Ensure that both video and audio are included in the extracted clips.
 - **Concatenation**: Combine multiple clips into a single video file, maintaining audio synchronization.
 - **Logging**: Log the processing of each clip, including its tag and start time in the match.
-- **Social Media Ready**: Prepare video content that is optimized for sharing on social media platforms.
 
 ## Usage
 
@@ -32,6 +31,22 @@ This repository provides tools for processing sports match videos captured by VE
    ```bash
    pip install -r requirements.txt
    ```
+
+### Environment Configuration
+
+Create a `.env` file in the root of the project with the following environment variables:
+
+- `VEO_API_TEMP_TOKEN`: Your temporary API token, which can be fetched from the VEO API Explorer.
+- `BASE_URL`: The base URL for the VEO API, typically `https://api.veo.co/`.
+- `NUM_THREADS`: The number of threads to use for concurrent processing, e.g., `4`.
+
+Example `.env` file:
+
+```.env
+VEO_API_TEMP_TOKEN=your_api_temp_token_here
+BASE_URL=https://api.veo.co/
+NUM_THREADS=4
+```
 
 ### Running the Script
 
