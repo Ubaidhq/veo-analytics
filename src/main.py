@@ -3,12 +3,16 @@ import argparse
 import logging
 from datetime import datetime
 from threading import Lock
-from veo_api.matches import fetch_matches
-from veo_api.clips import list_clips
-from utils.clip_handler import clip_video, concatenate_clips
-from moviepy.editor import VideoFileClip
 from concurrent.futures import ThreadPoolExecutor
+from typing import List
+
 from dotenv import load_dotenv
+from moviepy.editor import VideoFileClip
+
+from veo_api.api_handler import ApiHandler
+from utils.clips import Clip
+from utils.clip_handler import ClipHandler
+from utils.matches import Match
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,7 +49,7 @@ def download_clip(clip, full_video_path, recording_start_time, video_duration, o
 
     clip_output_path = f"./clips/{clip['id']}_clipped.mp4"
     logging.info(f"Processing clip {clip['id']} with tag {tag}.")
-    clip_video(full_video_path, clip_start_time, clip_end_time, recording_start_time.isoformat(), clip_output_path, tag, offset)
+    ClipHandler.clip_video(full_video_path, clip_start_time, clip_end_time, recording_start_time.isoformat(), clip_output_path, tag, offset)
 
     with lock:
         all_clip_paths.append(clip_output_path)
@@ -60,7 +64,7 @@ def process_match(match, offset, use_clips, tags):
 
     if use_clips:
         # Use individual clip streams
-        clips = list_clips(match_id, tags=tags)
+        clips = ApiHandler.fetch_clips(match_id, tags=tags)
         if not clips:
             logging.warning(f"No clips found for Match ID {match_id}")
             return
@@ -80,7 +84,7 @@ def process_match(match, offset, use_clips, tags):
         # Concatenate all extracted clips
         if all_clip_paths:
             output_path = f"./output/{match_id}_concatenated_video.mp4"
-            concatenate_clips(all_clip_paths, output_path)
+            ClipHandler.concatenate_clips(all_clip_paths, output_path)
             logging.info(f"All clips concatenated and saved to {output_path}")
 
     else:
@@ -89,9 +93,9 @@ def process_match(match, offset, use_clips, tags):
         if not os.path.exists(full_video_path):
             logging.info(f"Full video for match ID '{match_id}' not found in clips directory. Downloading...")
             # Download the full video using any clip's stream link
-            clips = list_clips(match_id, tags=tags)
+            clips = ApiHandler.fetch_clips(match_id, tags=tags)
             if clips:
-                full_video_path = download_full_video(clips[0])
+                full_video_path = ApiHandler.download_video(clips[0])
             else:
                 logging.warning(f"No clips found for Match ID {match_id} to download the full video.")
                 return
@@ -103,7 +107,7 @@ def process_match(match, offset, use_clips, tags):
 
         # Step 2: Fetch clips for the match
         try:
-            clips = list_clips(match_id, tags=tags)
+            clips = ApiHandler.fetch_clips(match_id, tags=tags)
             if not clips:
                 logging.warning(f"No clips found for Match ID {match_id}")
                 return
@@ -126,7 +130,7 @@ def process_match(match, offset, use_clips, tags):
             # Step 3: Concatenate all extracted clips
             if all_clip_paths:
                 output_path = f"./output/{match_id}_concatenated_video.mp4"
-                concatenate_clips(all_clip_paths, output_path)
+                ClipHandler.concatenate_clips(all_clip_paths, output_path)
                 logging.info(f"All clips concatenated and saved to {output_path}")
 
         except Exception as e:
@@ -135,14 +139,14 @@ def process_match(match, offset, use_clips, tags):
 def main(match_id: str = None, offset: int = 5, use_clips: bool = False, tags: list = None):
     # Step 1: Fetch the list of matches
     try:
-        matches = fetch_matches()
+        matches: List[Match] = ApiHandler.fetch_matches()
         logging.info("Matches fetched successfully.")
 
         if match_id:
             # Process a specific match
             match_found = False
-            for match in matches['items']:
-                if match.get('id', '') == match_id:
+            for match in matches:
+                if match.id == match_id:
                     match_found = True
                     process_match(match, offset, use_clips, tags)
                     break
@@ -150,8 +154,9 @@ def main(match_id: str = None, offset: int = 5, use_clips: bool = False, tags: l
                 logging.warning(f"Match ID '{match_id}' not found.")
         else:
             # Process only the first match
-            if matches['items']:
-                process_match(matches['items'][0], offset, use_clips, tags)
+            if matches:
+                latest_match = matches[0]
+                process_match(latest_match, offset, use_clips, tags)
             else:
                 logging.warning("No matches available to process.")
 
@@ -160,7 +165,7 @@ def main(match_id: str = None, offset: int = 5, use_clips: bool = False, tags: l
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process and concatenate clips for a specific match.")
-    parser.add_argument("match_id", type=str, nargs='?', help="The ID of the match to process.")
+    parser.add_argument("--match_id", type=str, nargs='?', help="The ID of the match to process.")
     parser.add_argument("--offset", type=int, default=5, help="Number of seconds to trim from the start and end of each clip.")
     parser.add_argument("--use-clips", action='store_true', help="Use individual clip streams instead of downloading the full video.")
     parser.add_argument("--tags", type=str, nargs='*', default=['shot-on-goal', 'goal'], help="Tags to filter clips by.")
