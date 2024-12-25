@@ -2,11 +2,10 @@ import os
 import argparse
 import logging
 from datetime import datetime
-from threading import Thread, Lock
-from veo_api.matches import list_matches
+from threading import Lock
+from veo_api.matches import fetch_matches
 from veo_api.clips import list_clips
 from utils.clip_handler import clip_video, concatenate_clips
-# from utils.video_processing import concatenate_clips
 from moviepy.editor import VideoFileClip
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -136,7 +135,7 @@ def process_match(match, offset, use_clips, tags):
 def main(match_id: str = None, offset: int = 5, use_clips: bool = False, tags: list = None):
     # Step 1: Fetch the list of matches
     try:
-        matches = list_matches()
+        matches = fetch_matches()
         logging.info("Matches fetched successfully.")
 
         if match_id:

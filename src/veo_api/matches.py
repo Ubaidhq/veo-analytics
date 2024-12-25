@@ -5,8 +5,8 @@ class Match:
     """
     A class to represent a match.
     """
-    def __init__(self, match_id: str, timeline: dict, title: str, links: list, recordings: list):
-        self.match_id = match_id
+    def __init__(self, id: str, timeline: dict, title: str, links: list, recordings: list):
+        self.id = id
         self.timeline = timeline # e.g{start: '2024-12-21T15:57:41.440Z', end: '2024-12-21T16:00:00.000Z'}
         self.title = title
         self.links = links
@@ -15,7 +15,7 @@ class Match:
     def __repr__(self):
         return f"Match(id={self.match_id}, title={self.title})"
 
-def list_matches(page_size=20):
+def fetch_matches(page_size=20):
     """
     Fetch a list of matches from the Veo API, handling pagination.
 
@@ -37,7 +37,7 @@ def list_matches(page_size=20):
             matches_data = response.json()
             matches.extend([
                 Match(
-                    match_id=match['id'],
+                    id=match['id'],
                     timeline=match['timeline'],
                     title=match['title'],
                     links=match['links'],

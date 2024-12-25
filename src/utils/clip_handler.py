@@ -1,61 +1,136 @@
 import os
 import requests
+import logging
+from typing import Dict, List, Any
+
 from tqdm import tqdm
 from datetime import datetime
+
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 from utils.file_handler import get_clip_save_path
-import logging
-from typing import Dict, List
+from veo_api.authentication import get_headers, BASE_URL
+from veo_api.matches import Match
+from veo_api.clips import Clip
 
-def download_clip(clip: Dict, all_clip_paths: List[str], lock) -> None:
+DEFAULT_TAGS = ['shot-on-goal', 'goal']
+
+class ClipHandler:
     """
-    Download a video clip from the provided clip data and save it to disk.
-
-    Arguments:
-        clip (Dict): A dictionary containing clip information.
-        all_clip_paths (List[str]): List to store paths of all downloaded clips.
-        lock: A threading lock to ensure thread-safe operations on shared resources.
-
-    Returns:
-        None
+    Class to handle fetching, downloading, and manipulating clips.  This class should be able to handle clips
+    for multiple matches.
     """
-    try:
-        stream_url = None
-        for link in clip.get('links', []):
-            if link.get('rel') == 'stream':
-                stream_url = link.get('href')
-                break
+    def __init__(self) -> None:
+        self.clips: dict[str, list[Clip]] = []
+        pass
 
-        if not stream_url:
-            logging.error("Stream URL not found in clip data.")
-            return
+    def fetch_clips(self, match: Match, tags: list = None, page_size: int = 20) -> None:
+        """
+        Fetch a list of clips for a given match from the Veo API, handling pagination.  Saves the clips to the
+        self.clips dictionary under the match.id key.
 
-        video_id = clip.get('id')
-        save_path = os.path.join('./clips', f"{video_id}.mp4")
+        Arguments:
+            match: The match to fetch clips for.
+            tags: List of tags to filter clips by.
+            page_size: Number of clips to retrieve per page (default 20).
 
-        logging.info(f"Downloading clip from {stream_url} to {save_path}")
+        """
+        if tags is None:
+            tags = DEFAULT_TAGS
 
-        response = requests.get(stream_url, stream=True)
-        if response.status_code != 200:
-            logging.error(f"Failed to download clip. Status code: {response.status_code}")
-            return
+        next_page_token = None
 
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 8192  # 8 KB
+        while True:
+            url = f"{BASE_URL}clips?match={match.id}&page_size={page_size}"
+            if next_page_token:
+                url += f"&page_token={next_page_token}"
 
-        with open(save_path, 'wb') as f, tqdm(
-            total=total_size, unit='iB', unit_scale=True, desc=video_id
-        ) as bar:
-            for chunk in response.iter_content(chunk_size=block_size):
-                f.write(chunk)
-                bar.update(len(chunk))
+            headers = get_headers()
+            response = requests.get(url, headers=headers)
 
-        with lock:
-            all_clip_paths.append(save_path)
-            logging.info(f"Clip downloaded and saved to {save_path}")
+            if response.status_code == 200:
+                data = response.json()
+                # Filter clips based on tags
+                filtered_clips = []
+                for clip in data.get('items', []):
+                    if 'tags' in clip and any(tag in tags for tag in clip['tags']):
+                        stream_url = None
+                        for link in clip.get('links', []):
+                            if link.get('rel') == 'stream':
+                                stream_url = link.get('href')
+                                break
 
-    except Exception as e:
-        logging.error(f"Error downloading clip {clip.get('id')}: {e}")
+                        if not stream_url:
+                            raise Exception("Stream URL not found in clip data.")
+
+                        filtered_clips.append(
+                            Clip(
+                                clip_id=clip['id'],
+                                tags=clip['tags'],
+                                start_time=clip['timeline']['start'],
+                                end_time=clip['timeline']['end'],
+                                url=clip['links'][0]['href'],
+                                stream_url=stream_url,
+                                match=match
+                            )
+                        )
+                self.clips[match.id].extend(filtered_clips)
+
+                # Check for next page token
+                next_page_token = data.get('next_page_token')
+                if not next_page_token:
+                    break
+            else:
+                raise Exception(f"Failed to fetch clips. Status code: {response.status_code}")
+
+    def download_clip(clip: Dict, all_clip_paths: List[str], lock) -> None:
+        """
+        Download a video clip from the provided clip data and save it to disk.
+
+        Arguments:
+            clip (Dict): A dictionary containing clip information.
+            all_clip_paths (List[str]): List to store paths of all downloaded clips.
+            lock: A threading lock to ensure thread-safe operations on shared resources.
+
+        Returns:
+            None
+    """
+        try:
+            stream_url = None
+            for link in clip.get('links', []):
+                if link.get('rel') == 'stream':
+                    stream_url = link.get('href')
+                    break
+
+            if not stream_url:
+                logging.error("Stream URL not found in clip data.")
+                return
+
+            video_id = clip.get('id')
+            save_path = os.path.join('./clips', f"{video_id}.mp4")
+
+            logging.info(f"Downloading clip from {stream_url} to {save_path}")
+
+            response = requests.get(stream_url, stream=True)
+            if response.status_code != 200:
+                logging.error(f"Failed to download clip. Status code: {response.status_code}")
+                return
+
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 8192  # 8 KB
+
+            with open(save_path, 'wb') as f, tqdm(
+                total=total_size, unit='iB', unit_scale=True, desc=video_id
+            ) as bar:
+                for chunk in response.iter_content(chunk_size=block_size):
+                    f.write(chunk)
+                    bar.update(len(chunk))
+
+            with lock:
+                all_clip_paths.append(save_path)
+                logging.info(f"Clip downloaded and saved to {save_path}")
+
+        except Exception as e:
+            logging.error(f"Error downloading clip {clip.get('id')}: {e}")
 
 def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str, offset: int) -> None:
     """
