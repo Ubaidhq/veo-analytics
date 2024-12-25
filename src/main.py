@@ -1,6 +1,7 @@
 import os
 import argparse
 import logging
+import sys
 from datetime import datetime
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
@@ -9,7 +10,7 @@ from typing import List
 from dotenv import load_dotenv
 from moviepy.editor import VideoFileClip
 
-from veo_api.api_handler import ApiHandler
+from veo_api.api_handler import APIHandler
 from utils.clips import Clip
 from utils.clip_handler import ClipHandler
 from utils.matches import Match
@@ -55,16 +56,14 @@ def download_clip(clip, full_video_path, recording_start_time, video_duration, o
         all_clip_paths.append(clip_output_path)
 
 def process_match(match, offset, use_clips, tags):
-    match_id = match['id']
-    match_name = match.get('title', 'Unnamed')
-    logging.info(f"Processing match: {match_name} with ID: {match_id}")
+    logging.info(f"Processing match: {match.title}")
 
     # Parse the recording start time
-    recording_start_time = datetime.fromisoformat(match['timeline']['start'].replace('Z', '+00:00'))
+    recording_start_time = datetime.fromisoformat(match.timeline['start'].replace('Z', '+00:00'))
 
     if use_clips:
         # Use individual clip streams
-        clips = ApiHandler.fetch_clips(match_id, tags=tags)
+        clips = APIHandler.fetch_clips(matc, tags=tags)
         if not clips:
             logging.warning(f"No clips found for Match ID {match_id}")
             return
@@ -93,9 +92,9 @@ def process_match(match, offset, use_clips, tags):
         if not os.path.exists(full_video_path):
             logging.info(f"Full video for match ID '{match_id}' not found in clips directory. Downloading...")
             # Download the full video using any clip's stream link
-            clips = ApiHandler.fetch_clips(match_id, tags=tags)
+            clips = APIHandler.fetch_clips(match_id, tags=tags)
             if clips:
-                full_video_path = ApiHandler.download_video(clips[0])
+                full_video_path = APIHandler.download_video(clips[0])
             else:
                 logging.warning(f"No clips found for Match ID {match_id} to download the full video.")
                 return
@@ -107,7 +106,7 @@ def process_match(match, offset, use_clips, tags):
 
         # Step 2: Fetch clips for the match
         try:
-            clips = ApiHandler.fetch_clips(match_id, tags=tags)
+            clips = APIHandler.fetch_clips(match_id, tags=tags)
             if not clips:
                 logging.warning(f"No clips found for Match ID {match_id}")
                 return
@@ -136,34 +135,7 @@ def process_match(match, offset, use_clips, tags):
         except Exception as e:
             logging.error(f"Error processing match {match_id}: {e}", exc_info=True)
 
-def main(match_id: str = None, offset: int = 5, use_clips: bool = False, tags: list = None):
-    # Step 1: Fetch the list of matches
-    try:
-        matches: List[Match] = ApiHandler.fetch_matches()
-        logging.info("Matches fetched successfully.")
-
-        if match_id:
-            # Process a specific match
-            match_found = False
-            for match in matches:
-                if match.id == match_id:
-                    match_found = True
-                    process_match(match, offset, use_clips, tags)
-                    break
-            if not match_found:
-                logging.warning(f"Match ID '{match_id}' not found.")
-        else:
-            # Process only the first match
-            if matches:
-                latest_match = matches[0]
-                process_match(latest_match, offset, use_clips, tags)
-            else:
-                logging.warning("No matches available to process.")
-
-    except Exception as e:
-        logging.error(f"Error fetching matches: {e}", exc_info=True)
-
-if __name__ == "__main__":
+def main(args):
     parser = argparse.ArgumentParser(description="Process and concatenate clips for a specific match.")
     parser.add_argument("--match_id", type=str, nargs='?', help="The ID of the match to process.")
     parser.add_argument("--offset", type=int, default=5, help="Number of seconds to trim from the start and end of each clip.")
@@ -171,4 +143,40 @@ if __name__ == "__main__":
     parser.add_argument("--tags", type=str, nargs='*', default=['shot-on-goal', 'goal'], help="Tags to filter clips by.")
     args = parser.parse_args()
 
-    main(args.match_id, args.offset, args.use_clips, args.tags)
+    # Print the configuration in a blocked format
+    logging.info(
+        "\nConfiguration:\n"
+        f"{'match_id:':<12} {args.match_id}\n"
+        f"{'offset:':<12} {args.offset}\n"
+        f"{'use_clips:':<12} {args.use_clips}\n"
+        f"{'tags:':<12} {', '.join(args.tags)}"
+    )
+
+    # Step 1: Fetch the list of matches
+    try:
+        matches: List[Match] = APIHandler.fetch_matches()
+        logging.info("Matches fetched successfully.")
+
+        if args.match_id:
+            # Process a specific match
+            match_found = False
+            for match in matches:
+                if match.id == args.match_id:
+                    match_found = True
+                    process_match(match, args.offset, args.use_clips, args.tags)
+                    break
+            if not match_found:
+                logging.warning(f"Match ID '{args.match_id}' not found.")
+        else:
+            # Process only the first match
+            if matches:
+                latest_match = matches[0]
+                process_match(latest_match, args.offset, args.use_clips, args.tags)
+            else:
+                logging.warning("No matches available to process.")
+
+    except Exception as e:
+        logging.error(f"Error fetching matches: {e}", exc_info=True)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

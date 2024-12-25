@@ -11,12 +11,17 @@ class Clip:
         self.match = match
     
     def __repr__(self):
-        return f"Clip(id={self.clip_id}, tags={self.tags}, start_time={self.start_time},
-          end_time={self.end_time}, url={self.url}, stream_url={self.stream_url}, match_id={self.match.match_id})"
+        return (
+            f"Clip(id={self.clip_id}, tags={self.tags}, start_time={self.start_time}, "
+            f"end_time={self.end_time}, url={self.url}, stream_url={self.stream_url}, "
+            f"match_id={self.match.id})"
+        )
     
     def __str__(self):
-        return f"Clip from match: {self.match.title} with tags: {self.tags}.  Duration: {self.clip.duration}.
-        Start time: {self.start_time}"
+        return (
+            f"Clip from match: {self.match.title} with tags: {self.tags}. "
+            f"Duration: {self.duration}. Start time: {self.start_time}"
+        )
     
     @property
     def duration(self):

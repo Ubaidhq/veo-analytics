@@ -1,12 +1,18 @@
 import requests
+import logging
+import os
+from tqdm import tqdm
+from typing import List
+
 from veo_api.authentication import get_headers, BASE_URL
-from utils.clip import Clip
-from utils.match import Match
+from utils.clips import Clip
+from utils.matches import Match
 
 class APIHandler:
     def __init__(self, page_size=20):
         self.page_size = page_size
 
+    @staticmethod
     def fetch_matches(self):
         """
         Fetch a list of matches from the Veo API, handling pagination.
@@ -43,6 +49,7 @@ class APIHandler:
 
         return matches
 
+    @staticmethod
     def fetch_clips(self, match, tags=None):
         """
         Fetch a list of clips for a given match from the Veo API, handling pagination.
@@ -85,3 +92,49 @@ class APIHandler:
                 raise Exception(f"Failed to fetch clips. Status code: {response.status_code}")
 
         return clips
+    
+    def download_clip(clip: Clip, all_clip_paths: List[str], lock) -> None:
+        """
+        Download a video clip from the provided clip data and save it to disk.
+
+        Arguments:
+            clip: A dictionary containing clip information.
+            all_clip_paths: List to store paths of all downloaded clips.
+            lock: A threading lock to ensure thread-safe operations on shared resources.
+
+        Returns:
+            None
+        """
+        try:
+            stream_url = clip.stream_url
+
+            if not stream_url:
+                logging.error("Stream URL not found for clip.")
+                return
+
+            video_name = f"{clip.match.title}_{clip.tags[0]}_{clip.start_time}.mp4"
+            save_path = os.path.join('./clips', video_name)
+
+            logging.info(f"Downloading clip from {stream_url} to {save_path}")
+
+            response = requests.get(stream_url, stream=True)
+            if response.status_code != 200:
+                logging.error(f"Failed to download clip. Status code: {response.status_code}")
+                return
+
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 8192  # 8 KB
+
+            with open(save_path, 'wb') as f, tqdm(
+                total=total_size, unit='iB', unit_scale=True, desc=save_path
+            ) as bar:
+                for chunk in response.iter_content(chunk_size=block_size):
+                    f.write(chunk)
+                    bar.update(len(chunk))
+
+            with lock:
+                all_clip_paths.append(save_path)
+                logging.info(f"Clip downloaded and saved to {save_path}")
+
+        except Exception as e:
+            logging.error(f"Error downloading {save_path}: {e}")
