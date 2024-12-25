@@ -1,4 +1,4 @@
-from veo_api.matches import Match
+from utils.matches import Match
 
 class Clip:
     def __init__(self, clip_id: str, tags: list, start_time: str, end_time: str, url: str, stream_url: str, match: Match):

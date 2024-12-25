@@ -20,52 +20,6 @@ class ClipHandler:
         self.clips: dict[str, list[Clip]] = []
         pass
 
-    def download_clip(clip: Clip, all_clip_paths: List[str], lock) -> None:
-        """
-        Download a video clip from the provided clip data and save it to disk.
-
-        Arguments:
-            clip: A dictionary containing clip information.
-            all_clip_paths: List to store paths of all downloaded clips.
-            lock: A threading lock to ensure thread-safe operations on shared resources.
-
-        Returns:
-            None
-        """
-        try:
-            stream_url = clip.stream_url
-
-            if not stream_url:
-                logging.error("Stream URL not found for clip.")
-                return
-
-            video_name = f"{clip.match.title}_{clip.tags[0]}_{clip.start_time}.mp4"
-            save_path = os.path.join('./clips', video_name)
-
-            logging.info(f"Downloading clip from {stream_url} to {save_path}")
-
-            response = requests.get(stream_url, stream=True)
-            if response.status_code != 200:
-                logging.error(f"Failed to download clip. Status code: {response.status_code}")
-                return
-
-            total_size = int(response.headers.get('content-length', 0))
-            block_size = 8192  # 8 KB
-
-            with open(save_path, 'wb') as f, tqdm(
-                total=total_size, unit='iB', unit_scale=True, desc=save_path
-            ) as bar:
-                for chunk in response.iter_content(chunk_size=block_size):
-                    f.write(chunk)
-                    bar.update(len(chunk))
-
-            with lock:
-                all_clip_paths.append(save_path)
-                logging.info(f"Clip downloaded and saved to {save_path}")
-
-        except Exception as e:
-            logging.error(f"Error downloading {save_path}: {e}")
-
     def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str, offset: int) -> None:
         """
         Clip a segment from the video based on start and end times relative to the recording start time.
