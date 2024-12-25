@@ -13,7 +13,7 @@ class APIHandler:
         self.page_size = page_size
 
     @staticmethod
-    def fetch_matches(self):
+    def fetch_matches(page_size=20):
         """
         Fetch a list of matches from the Veo API, handling pagination.
         """
@@ -21,7 +21,7 @@ class APIHandler:
         next_page_token = None
 
         while True:
-            url = f"{BASE_URL}matches?page_size={self.page_size}"
+            url = f"{BASE_URL}matches?page_size={page_size}"
             if next_page_token:
                 url += f"&page_token={next_page_token}"
 
@@ -50,7 +50,7 @@ class APIHandler:
         return matches
 
     @staticmethod
-    def fetch_clips(self, match, tags=None):
+    def fetch_clips(match: Match, tags=None, page_size=20):
         """
         Fetch a list of clips for a given match from the Veo API, handling pagination.
         """
@@ -61,7 +61,7 @@ class APIHandler:
         next_page_token = None
 
         while True:
-            url = f"{BASE_URL}clips?match={match.id}&page_size={self.page_size}"
+            url = f"{BASE_URL}clips?match={match.id}&page_size={page_size}"
             if next_page_token:
                 url += f"&page_token={next_page_token}"
 

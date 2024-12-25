@@ -55,7 +55,7 @@ def download_clip(clip, full_video_path, recording_start_time, video_duration, o
     with lock:
         all_clip_paths.append(clip_output_path)
 
-def process_match(match, offset, use_clips, tags):
+def process_match(match: Match, offset, use_clips, tags):
     logging.info(f"Processing match: {match.title}")
 
     # Parse the recording start time
@@ -63,18 +63,18 @@ def process_match(match, offset, use_clips, tags):
 
     if use_clips:
         # Use individual clip streams
-        clips = APIHandler.fetch_clips(matc, tags=tags)
+        clips: List[Clip] = APIHandler.fetch_clips(match, tags=tags)
         if not clips:
-            logging.warning(f"No clips found for Match ID {match_id}")
+            logging.warning(f"No clips found for Match {match.title}")
             return
 
         # Sort clips by their start time
-        clips.sort(key=lambda clip: datetime.fromisoformat(clip['timeline']['start'].replace('Z', '+00:00')))
+        clips.sort(key=lambda clip: datetime.fromisoformat(clip.start_time.replace('Z', '+00:00')))
 
         # Collect all clip paths
         all_clip_paths = []
         for clip in clips:
-            stream_url = next((link['href'] for link in clip.get('links', []) if link.get('rel') == 'stream'), None)
+            stream_url = clip.stream_url
             if stream_url:
                 all_clip_paths.append(stream_url)
             else:
@@ -82,21 +82,21 @@ def process_match(match, offset, use_clips, tags):
 
         # Concatenate all extracted clips
         if all_clip_paths:
-            output_path = f"./output/{match_id}_concatenated_video.mp4"
+            output_path = f"./output/{match.title}{'_'.join(tags)}.mp4"
             ClipHandler.concatenate_clips(all_clip_paths, output_path)
             logging.info(f"All clips concatenated and saved to {output_path}")
 
     else:
         # Check if the full video is already downloaded
-        full_video_path = f"./clips/{match_id}.mp4"
+        full_video_path = f"./clips/{match.id}.mp4"
         if not os.path.exists(full_video_path):
-            logging.info(f"Full video for match ID '{match_id}' not found in clips directory. Downloading...")
+            logging.info(f"Full video for match: {match.title} not found in clips directory. Downloading...")
             # Download the full video using any clip's stream link
-            clips = APIHandler.fetch_clips(match_id, tags=tags)
+            clips = APIHandler.fetch_clips(match, tags=tags)
             if clips:
                 full_video_path = APIHandler.download_video(clips[0])
             else:
-                logging.warning(f"No clips found for Match ID {match_id} to download the full video.")
+                logging.warning(f"No clips found for match: {match.title} to download the full video.")
                 return
 
         # Check the duration of the downloaded video
@@ -106,9 +106,9 @@ def process_match(match, offset, use_clips, tags):
 
         # Step 2: Fetch clips for the match
         try:
-            clips = APIHandler.fetch_clips(match_id, tags=tags)
+            clips = APIHandler.fetch_clips(match.id, tags=tags)
             if not clips:
-                logging.warning(f"No clips found for Match ID {match_id}")
+                logging.warning(f"No clips found for match: {match.title}")
                 return
 
             # Sort clips by their start time
@@ -128,12 +128,12 @@ def process_match(match, offset, use_clips, tags):
 
             # Step 3: Concatenate all extracted clips
             if all_clip_paths:
-                output_path = f"./output/{match_id}_concatenated_video.mp4"
+                output_path = f"./output/{match.title}{'_'.join(tags)}.mp4"
                 ClipHandler.concatenate_clips(all_clip_paths, output_path)
                 logging.info(f"All clips concatenated and saved to {output_path}")
 
         except Exception as e:
-            logging.error(f"Error processing match {match_id}: {e}", exc_info=True)
+            logging.error(f"Error processing match {match.id}: {e}", exc_info=True)
 
 def main(args):
     parser = argparse.ArgumentParser(description="Process and concatenate clips for a specific match.")
