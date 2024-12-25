@@ -7,106 +7,40 @@ from tqdm import tqdm
 from datetime import datetime
 
 from moviepy.editor import VideoFileClip, concatenate_videoclips
-from utils.file_handler import get_clip_save_path
-from veo_api.authentication import get_headers, BASE_URL
-from veo_api.matches import Match
-from veo_api.clips import Clip
+from utils.clips import Clip
 
 DEFAULT_TAGS = ['shot-on-goal', 'goal']
 
 class ClipHandler:
     """
-    Class to handle fetching, downloading, and manipulating clips.  This class should be able to handle clips
+    Class to handle downloading and manipulating clips.  This class should be able to handle clips
     for multiple matches.
     """
     def __init__(self) -> None:
         self.clips: dict[str, list[Clip]] = []
         pass
 
-    def fetch_clips(self, match: Match, tags: list = None, page_size: int = 20) -> None:
-        """
-        Fetch a list of clips for a given match from the Veo API, handling pagination.  Saves the clips to the
-        self.clips dictionary under the match.id key.
-
-        Arguments:
-            match: The match to fetch clips for.
-            tags: List of tags to filter clips by.
-            page_size: Number of clips to retrieve per page (default 20).
-
-        """
-        if tags is None:
-            tags = DEFAULT_TAGS
-
-        next_page_token = None
-
-        while True:
-            url = f"{BASE_URL}clips?match={match.id}&page_size={page_size}"
-            if next_page_token:
-                url += f"&page_token={next_page_token}"
-
-            headers = get_headers()
-            response = requests.get(url, headers=headers)
-
-            if response.status_code == 200:
-                data = response.json()
-                # Filter clips based on tags
-                filtered_clips = []
-                for clip in data.get('items', []):
-                    if 'tags' in clip and any(tag in tags for tag in clip['tags']):
-                        stream_url = None
-                        for link in clip.get('links', []):
-                            if link.get('rel') == 'stream':
-                                stream_url = link.get('href')
-                                break
-
-                        if not stream_url:
-                            raise Exception("Stream URL not found in clip data.")
-
-                        filtered_clips.append(
-                            Clip(
-                                clip_id=clip['id'],
-                                tags=clip['tags'],
-                                start_time=clip['timeline']['start'],
-                                end_time=clip['timeline']['end'],
-                                url=clip['links'][0]['href'],
-                                stream_url=stream_url,
-                                match=match
-                            )
-                        )
-                self.clips[match.id].extend(filtered_clips)
-
-                # Check for next page token
-                next_page_token = data.get('next_page_token')
-                if not next_page_token:
-                    break
-            else:
-                raise Exception(f"Failed to fetch clips. Status code: {response.status_code}")
-
-    def download_clip(clip: Dict, all_clip_paths: List[str], lock) -> None:
+    def download_clip(clip: Clip, all_clip_paths: List[str], lock) -> None:
         """
         Download a video clip from the provided clip data and save it to disk.
 
         Arguments:
-            clip (Dict): A dictionary containing clip information.
-            all_clip_paths (List[str]): List to store paths of all downloaded clips.
+            clip: A dictionary containing clip information.
+            all_clip_paths: List to store paths of all downloaded clips.
             lock: A threading lock to ensure thread-safe operations on shared resources.
 
         Returns:
             None
-    """
+        """
         try:
-            stream_url = None
-            for link in clip.get('links', []):
-                if link.get('rel') == 'stream':
-                    stream_url = link.get('href')
-                    break
+            stream_url = clip.stream_url
 
             if not stream_url:
-                logging.error("Stream URL not found in clip data.")
+                logging.error("Stream URL not found for clip.")
                 return
 
-            video_id = clip.get('id')
-            save_path = os.path.join('./clips', f"{video_id}.mp4")
+            video_name = f"{clip.match.title}_{clip.tags[0]}_{clip.start_time}.mp4"
+            save_path = os.path.join('./clips', video_name)
 
             logging.info(f"Downloading clip from {stream_url} to {save_path}")
 
@@ -119,7 +53,7 @@ class ClipHandler:
             block_size = 8192  # 8 KB
 
             with open(save_path, 'wb') as f, tqdm(
-                total=total_size, unit='iB', unit_scale=True, desc=video_id
+                total=total_size, unit='iB', unit_scale=True, desc=save_path
             ) as bar:
                 for chunk in response.iter_content(chunk_size=block_size):
                     f.write(chunk)
@@ -130,62 +64,62 @@ class ClipHandler:
                 logging.info(f"Clip downloaded and saved to {save_path}")
 
         except Exception as e:
-            logging.error(f"Error downloading clip {clip.get('id')}: {e}")
+            logging.error(f"Error downloading {save_path}: {e}")
 
-def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str, offset: int) -> None:
-    """
-    Clip a segment from the video based on start and end times relative to the recording start time.
+    def clip_video(video_path: str, clip_start_time: str, clip_end_time: str, recording_start_time: str, output_path: str, tag: str, offset: int) -> None:
+        """
+        Clip a segment from the video based on start and end times relative to the recording start time.
 
-    Arguments:
-        video_path (str): Path to the full video.
-        clip_start_time (str): Start time of the clip in ISO 8601 format.
-        clip_end_time (str): End time of the clip in ISO 8601 format.
-        recording_start_time (str): Start time of the recording in ISO 8601 format.
-        output_path (str): Path where the clipped video will be saved.
-        tag (str): Tag of the clip for logging purposes.
-        offset (int): Number of seconds to trim from the start and end of the clip.
+        Arguments:
+            video_path (str): Path to the full video.
+            clip_start_time (str): Start time of the clip in ISO 8601 format.
+            clip_end_time (str): End time of the clip in ISO 8601 format.
+            recording_start_time (str): Start time of the recording in ISO 8601 format.
+            output_path (str): Path where the clipped video will be saved.
+            tag (str): Tag of the clip for logging purposes.
+            offset (int): Number of seconds to trim from the start and end of the clip.
 
-    Returns:
-        None
-    """
-    # Parse the datetime strings
-    recording_start = datetime.fromisoformat(recording_start_time.replace('Z', '+00:00'))
-    clip_start = datetime.fromisoformat(clip_start_time.replace('Z', '+00:00'))
-    clip_end = datetime.fromisoformat(clip_end_time.replace('Z', '+00:00'))
+        Returns:
+            None
+        """
+        # Parse the datetime strings
+        recording_start = datetime.fromisoformat(recording_start_time.replace('Z', '+00:00'))
+        clip_start = datetime.fromisoformat(clip_start_time.replace('Z', '+00:00'))
+        clip_end = datetime.fromisoformat(clip_end_time.replace('Z', '+00:00'))
 
-    # Calculate the start and end offsets in seconds, adjusting by the offset
-    start_seconds = (clip_start - recording_start).total_seconds() + offset
-    end_seconds = (clip_end - recording_start).total_seconds() - offset
+        # Calculate the start and end offsets in seconds, adjusting by the offset
+        start_seconds = (clip_start - recording_start).total_seconds() + offset
+        end_seconds = (clip_end - recording_start).total_seconds() - offset
 
-    # Ensure the adjusted times are within valid bounds
-    if start_seconds < 0:
-        start_seconds = 0
-    if end_seconds < start_seconds:
-        end_seconds = start_seconds
+        # Ensure the adjusted times are within valid bounds
+        if start_seconds < 0:
+            start_seconds = 0
+        if end_seconds < start_seconds:
+            end_seconds = start_seconds
 
-    # Convert start time to minutes:seconds for logging
-    start_minutes = int(start_seconds // 60)
-    start_seconds_remainder = int(start_seconds % 60)
-    start_time_formatted = f"{start_minutes}:{start_seconds_remainder:02}"
+        # Convert start time to minutes:seconds for logging
+        start_minutes = int(start_seconds // 60)
+        start_seconds_remainder = int(start_seconds % 60)
+        start_time_formatted = f"{start_minutes}:{start_seconds_remainder:02}"
 
-    logging.info(f"Saving clip '{tag}' starting at {start_time_formatted} (mm:ss)")
+        logging.info(f"Saving clip '{tag}' starting at {start_time_formatted} (mm:ss)")
 
-    with VideoFileClip(video_path) as video:
-        # Extract the subclip with audio
-        clip = video.subclip(start_seconds, end_seconds)
-        clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        with VideoFileClip(video_path) as video:
+            # Extract the subclip with audio
+            clip = video.subclip(start_seconds, end_seconds)
+            clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
-def concatenate_clips(clip_paths: List[str], output_path: str) -> None:
-    """
-    Concatenate multiple video clips into one with audio.
+    def concatenate_clips(clip_paths: List[str], output_path: str) -> None:
+        """
+        Concatenate multiple video clips into one with audio.
 
-    Arguments:
-        clip_paths (List[str]): List of paths to the video clips.
-        output_path (str): Path where the final video will be saved.
+        Arguments:
+            clip_paths (List[str]): List of paths to the video clips.
+            output_path (str): Path where the final video will be saved.
 
-    Returns:
-        None
-    """
-    clips = [VideoFileClip(clip) for clip in clip_paths]
-    final_clip = concatenate_videoclips(clips, method="compose")
-    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        Returns:
+            None
+        """
+        clips = [VideoFileClip(clip) for clip in clip_paths]
+        final_clip = concatenate_videoclips(clips, method="compose")
+        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
