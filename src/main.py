@@ -74,11 +74,10 @@ def process_match(match: Match, offset, use_clips, tags):
         # Collect all clip paths
         all_clip_paths = []
         for clip in clips:
-            stream_url = clip.stream_url
-            if stream_url:
-                all_clip_paths.append(stream_url)
-            else:
-                logging.warning(f"No stream link found for clip {clip['id']}")
+            # Download each clip individually
+            clip_output_path = f"./clips/{clip.clip_id}.mp4"
+            APIHandler.download_clip(clip, clip_output_path, lock)
+            all_clip_paths.append(clip_output_path)
 
         # Concatenate all extracted clips
         if all_clip_paths:

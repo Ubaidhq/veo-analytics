@@ -74,6 +74,6 @@ class ClipHandler:
         Returns:
             None
         """
-        clips = [VideoFileClip(clip) for clip in clip_paths]
+        clips = [VideoFileClip(clip.stream_url) for clip in clip_paths]
         final_clip = concatenate_videoclips(clips, method="compose")
         final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')

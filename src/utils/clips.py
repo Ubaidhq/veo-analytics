@@ -1,4 +1,5 @@
 from utils.matches import Match
+from datetime import datetime
 
 class Clip:
     def __init__(self, clip_id: str, tags: list, start_time: str, end_time: str, url: str, stream_url: str, match: Match):
@@ -25,4 +26,8 @@ class Clip:
     
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        # Convert start_time and end_time to datetime objects
+        start_dt = datetime.fromisoformat(self.start_time.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(self.end_time.replace('Z', '+00:00'))
+        # Return the duration in seconds
+        return (end_dt - start_dt).total_seconds()

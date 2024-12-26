@@ -90,6 +90,7 @@ class APIHandler:
 
         return clips
     
+    @staticmethod
     def download_clip(clip: Clip, all_clip_paths: List[str], lock) -> None:
         """
         Download a video clip from the provided clip data and save it to disk.
