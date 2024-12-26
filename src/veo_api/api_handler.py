@@ -9,9 +9,6 @@ from utils.clips import Clip
 from utils.matches import Match
 
 class APIHandler:
-    def __init__(self, page_size=20):
-        self.page_size = page_size
-
     @staticmethod
     def fetch_matches(page_size=20):
         """
