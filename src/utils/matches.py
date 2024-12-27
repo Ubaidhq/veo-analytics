@@ -7,6 +7,8 @@ class Match:
     """
     def __init__(self, id: str, timeline: dict, title: str, links: list, recordings: list):
         self.id = id
+        self.start_time = timeline['start']
+        self.end_time = timeline['end']
         self.timeline = timeline # e.g{start: '2024-12-21T15:57:41.440Z', end: '2024-12-21T16:00:00.000Z'}
         self.title = title
         self.links = links

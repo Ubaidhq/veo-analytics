@@ -91,48 +91,81 @@ class APIHandler:
         return clips
     
     @staticmethod
-    def download_clip(clip: Clip, all_clip_paths: List[str], lock) -> None:
+    def download_clip(clip: Clip, lock) -> None:
         """
         Download a video clip from the provided clip data and save it to disk.
 
         Arguments:
             clip: A dictionary containing clip information.
-            all_clip_paths: List to store paths of all downloaded clips.
             lock: A threading lock to ensure thread-safe operations on shared resources.
 
         Returns:
             None
         """
+       
+        stream_url = clip.stream_url
+
+        if not stream_url:
+            logging.error("Stream URL not found for clip.")
+            return
+
+        video_name = f"{clip.match.title.replace(' ', '_')}_{clip.tags[0]}_{clip.start_time}.mp4"
+        save_path = os.path.join('./clips', video_name)
+        clip.save_path = save_path
+
+        if os.path.exists(save_path):
+            logging.info(f"Clip already exists at {save_path}")
+            return
+
         try:
-            stream_url = clip.stream_url
-
-            if not stream_url:
-                logging.error("Stream URL not found for clip.")
-                return
-
-            video_name = f"{clip.match.title}_{clip.tags[0]}_{clip.start_time}.mp4"
-            save_path = os.path.join('./clips', video_name)
-
-            logging.info(f"Downloading clip from {stream_url} to {save_path}")
-
-            response = requests.get(stream_url, stream=True)
-            if response.status_code != 200:
-                logging.error(f"Failed to download clip. Status code: {response.status_code}")
-                return
-
-            total_size = int(response.headers.get('content-length', 0))
-            block_size = 8192  # 8 KB
-
-            with open(save_path, 'wb') as f, tqdm(
-                total=total_size, unit='iB', unit_scale=True, desc=save_path
-            ) as bar:
-                for chunk in response.iter_content(chunk_size=block_size):
-                    f.write(chunk)
-                    bar.update(len(chunk))
-
-            with lock:
-                all_clip_paths.append(save_path)
-                logging.info(f"Clip downloaded and saved to {save_path}")
+            APIHandler.download_file(stream_url, save_path)
+            logging.info(f"Clip downloaded and saved to {save_path}")
 
         except Exception as e:
             logging.error(f"Error downloading {save_path}: {e}")
+
+    @staticmethod
+    def download_file(stream_url, save_path):
+        """
+        Downloads a file from the given stream URL and saves it to the specified path.
+
+        :param stream_url: The URL of the file to download.
+        :param save_path: The path where the file should be saved.
+        :return: None
+        """
+        logging.info(f"Downloading file from {stream_url} to {save_path}")
+
+        response = requests.get(stream_url, stream=True)
+        if response.status_code != 200:
+            logging.error(f"Failed to download clip. Status code: {response.status_code}")
+            return
+
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 8192  # 8 KB
+
+        with open(save_path, 'wb') as f, tqdm(
+            total=total_size, unit='iB', unit_scale=True, desc=save_path
+        ) as bar:
+            for chunk in response.iter_content(chunk_size=block_size):
+                f.write(chunk)
+                bar.update(len(chunk))
+# def download_clip(clip, full_video_path, recording_start_time, video_duration, offset, all_clip_paths):
+#     clip_start_time = clip.start_time
+#     clip_end_time = clip.end_time
+#     tag = clip.tags # Assuming 'tags' is a list or string
+
+#     # Calculate the start and end offsets in seconds
+#     start_seconds = (datetime.fromisoformat(clip_start_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
+#     end_seconds = (datetime.fromisoformat(clip_end_time.replace('Z', '+00:00')) - recording_start_time).total_seconds()
+
+#     if start_seconds >= video_duration or end_seconds > video_duration:
+#         with lock:
+#             logging.info(f"Skipping clip {clip.id} due to invalid timeline.")
+#         return
+
+#     clip_output_path = f"./clips/{clip.clip_id}_clipped.mp4"
+#     logging.info(f"Processing clip {clip.clip_id} with tag {tag}.")
+#     ClipHandler.clip_video(full_video_path, clip_start_time, clip_end_time, recording_start_time.isoformat(), clip_output_path, tag, offset)
+
+#     with lock:
+#         all_clip_paths.append(clip_output_path)

@@ -10,6 +10,7 @@ class Clip:
         self.url = url
         self.stream_url = stream_url
         self.match = match
+        self.save_path = None
     
     def __repr__(self):
         return (
