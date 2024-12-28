@@ -1,43 +1,23 @@
-import requests
-from typing import List, Dict, Any
-from .authentication import get_headers, BASE_URL
+from utils.matches import Match
 
-def list_clips(match_id: str, page_size: int = 20) -> List[Dict[str, Any]]:
-    """
-    Fetch a list of clips for a given match from the Veo API, handling pagination.
-
-    Arguments:
-        match_id (str): The ID of the match to fetch clips for.
-        page_size (int): Number of clips to retrieve per page (default 20).
-
-    Returns:
-        List[Dict[str, Any]]: A list of filtered clips if successful.
-    """
-    clips = []
-    next_page_token = None
-
-    while True:
-        url = f"{BASE_URL}clips?match={match_id}&page_size={page_size}"
-        if next_page_token:
-            url += f"&page_token={next_page_token}"
-
-        headers = get_headers()
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            data = response.json()
-            # Filter clips based on tags
-            filtered_clips = [
-                clip for clip in data.get('items', [])
-                if 'tags' in clip and any(tag in ['shot-on-goal', 'goal'] for tag in clip['tags'])
-            ]
-            clips.extend(filtered_clips)
-
-            # Check for next page token
-            next_page_token = data.get('next_page_token')
-            if not next_page_token:
-                break
-        else:
-            raise Exception(f"Failed to fetch clips. Status code: {response.status_code}")
-
-    return clips 
+class Clip:
+    def __init__(self, clip_id: str, tags: list, start_time: str, end_time: str, url: str, stream_url: str, match: Match):
+        self.clip_id = clip_id
+        self.tags = tags
+        self.start_time = start_time
+        self.end_time = end_time
+        self.url = url
+        self.stream_url = stream_url
+        self.match = match
+    
+    def __repr__(self):
+        return f"Clip(id={self.clip_id}, tags={self.tags}, start_time={self.start_time},
+          end_time={self.end_time}, url={self.url}, stream_url={self.stream_url}, match_id={self.match.match_id})"
+    
+    def __str__(self):
+        return f"Clip from match: {self.match.title} with tags: {self.tags}.  Duration: {self.clip.duration}.
+        Start time: {self.start_time}"
+    
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
